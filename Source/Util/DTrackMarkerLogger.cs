@@ -20,7 +20,11 @@
  *   x_mm..z_mm  : raw DTRACK position (mm, DTRACK room coordinates)
  *   x..z        : position in Unity world coordinates (meter)
  * Events file ('<data file>_events.csv'):
- *   recv_time_s,type,detail   with type = start | gap | counter_reset | no_frame_counter | receive_error | stop
+ *   recv_time_s,type,detail   with type = start | gap | counter_reset | no_frame_counter | receive_error |
+ *                             no_data | data_resumed | stop
+ *
+ * Missing data: StartRecording() fails if the DTrack object is disabled or could not open its UDP port;
+ * while recording, 'no_data' is reported if no frame arrives for 'noDataTimeoutSeconds' (DataReceivingChanged).
  */
 
 using System;
@@ -49,6 +53,9 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 	[ Tooltip( "Interval (in seconds) to flush data to disk; limits data loss if the application crashes" ) ]
 	public float flushIntervalSeconds = 1.0f;
 
+	[ Tooltip( "Report 'no data' if no DTRACK frame arrives for this time (in seconds)" ) ]
+	public float noDataTimeoutSeconds = 2.0f;
+
 	// Item passed from the receive thread to the writer thread.
 	private struct Item
 	{
@@ -63,6 +70,12 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 	private StreamWriter dataWriter;
 	private StreamWriter eventsWriter;
 	private long startTicks;
+	private int listenPort;
+
+	private long lastReceiveTicks;  // Stopwatch timestamp of the latest frame received (receive thread)
+	private volatile bool noData;  // no frame for 'noDataTimeoutSeconds' (writer thread)
+	private int noDataPeriods;
+	private bool notifiedReceivingData;  // state last reported on the main thread
 
 	private const int MaxFileNumber = 9999;  // highest number appended to file names
 
@@ -84,6 +97,14 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 	public long MissingFrames => Interlocked.Read( ref this.missingFrames );  // sum of frame counter gaps
 	public long ErrorCount => Interlocked.Read( ref this.errorCount );  // packets that failed to be received or parsed
 	public int QueueLength => ( this.queue != null ) ? this.queue.Count : 0;  // frames waiting to be written
+
+	// False while recording and no frame arrived for 'noDataTimeoutSeconds'.
+	public bool IsReceivingData => ! ( this.IsRecording && this.noData );
+	public double SecondsSinceLastFrame =>
+			( double )( Stopwatch.GetTimestamp() - Interlocked.Read( ref this.lastReceiveTicks ) ) / Stopwatch.Frequency;
+
+	// Invoked on the main thread when data stop (false) or resume (true) arriving while recording.
+	public event Action< DTrackMarkerLogger, bool > DataReceivingChanged;
 
 
 	// Start recording to a new file (call on the main thread).
@@ -107,6 +128,19 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		if ( this.dtrackSource == null )
 		{
 			Debug.LogError( "DTrackMarkerLogger: cannot find DTrack object, not recording" );
+			return false;
+		}
+
+		if ( ! this.dtrackSource.isActiveAndEnabled )
+		{
+			Debug.LogError( "DTrackMarkerLogger: DTrack object is disabled, not recording" );
+			return false;
+		}
+
+		if ( this.dtrackSource.IsStarted && ! this.dtrackSource.IsReceiving )
+		{
+			Debug.LogError( $"DTrackMarkerLogger: DTrack could not open UDP port {this.dtrackSource.listenPort} " +
+			                "(used by another application?), not recording" );
 			return false;
 		}
 
@@ -139,6 +173,11 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		this.errorCount = 0;
 
 		this.startTicks = Stopwatch.GetTimestamp();
+		this.listenPort = this.dtrackSource.listenPort;
+		this.lastReceiveTicks = this.startTicks;
+		this.noData = false;
+		this.noDataPeriods = 0;
+		this.notifiedReceivingData = true;
 		writeEvent( this.startTicks, "start",
 		            $"time={DateTime.Now:o}; stopwatch_hz={Stopwatch.Frequency}; port={this.dtrackSource.listenPort}; " +
 		            $"coordinates={this.dtrackSource.dTrackCoordinates}" +
@@ -183,7 +222,31 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		this.writerThread = null;
 
 		Debug.Log( $"DTrackMarkerLogger: stopped recording {this.FilePath} ({this.FramesWritten} frames, " +
-		           $"{this.GapCount} gaps with {this.MissingFrames} missing frames, {this.ErrorCount} receive errors)" );
+		           $"{this.GapCount} gaps with {this.MissingFrames} missing frames, {this.ErrorCount} receive errors, " +
+		           $"{this.noDataPeriods} periods without data)" );
+
+		if ( this.FramesWritten == 0 )
+			Debug.LogError( $"DTrackMarkerLogger: recording {this.FilePath} is EMPTY, no DTRACK frame was received" );
+	}
+
+	// Report changes of the 'no data' state on the main thread.
+
+	void Update()
+	{
+		if ( ! this.IsRecording )  return;
+
+		bool receiving = ! this.noData;
+		if ( receiving == this.notifiedReceivingData )  return;
+
+		this.notifiedReceivingData = receiving;
+
+		if ( receiving )
+			Debug.Log( "DTrackMarkerLogger: DTRACK data resumed" );
+		else
+			Debug.LogWarning( $"DTrackMarkerLogger: no DTRACK data for {this.noDataTimeoutSeconds} s " +
+			                  $"(check DTrack component, UDP port {this.listenPort} and DTRACK output settings)" );
+
+		this.DataReceivingChanged?.Invoke( this, receiving );
 	}
 
 	void OnDisable()
@@ -201,7 +264,10 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 
 	public void ReceiveDTrackFrame( Frame frame )
 	{
-		enqueue( new Item { ticks = Stopwatch.GetTimestamp(), frame = frame } );
+		long ticks = Stopwatch.GetTimestamp();
+		Interlocked.Exchange( ref this.lastReceiveTicks, ticks );
+
+		enqueue( new Item { ticks = ticks, frame = frame } );
 	}
 
 	// Receive error of DTrack class (called on the receive thread).
@@ -231,6 +297,8 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		bool hasFrameCounter = true;
 		long flushTicks = ( long )( Math.Max( 0.0f, this.flushIntervalSeconds ) * Stopwatch.Frequency );
 		long lastFlush = Stopwatch.GetTimestamp();
+		long noDataTicks = ( long )( Math.Max( 0.1f, this.noDataTimeoutSeconds ) * Stopwatch.Frequency );
+		long lastFrameTicks = this.startTicks;  // receive time of the previous frame written
 
 		try
 		{
@@ -246,6 +314,21 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 					}
 					else
 					{
+						if ( item.ticks - lastFrameTicks > noDataTicks )  // first frame after a period without data
+						{
+							if ( ! this.noData )  // not yet reported (e.g. writer was busy)
+							{
+								this.noDataPeriods++;
+								writeEvent( lastFrameTicks + noDataTicks, "no_data", noDataDetail() );
+							}
+
+							writeEvent( item.ticks, "data_resumed", String.Format( CultureInfo.InvariantCulture,
+							            "after {0:F1} s without frames", ( double )( item.ticks - lastFrameTicks ) / Stopwatch.Frequency ) );
+							this.noData = false;
+						}
+
+						lastFrameTicks = item.ticks;
+
 						long fr = item.frame.FrameCounter;
 
 						if ( lastFrameCounter >= 0 && hasFrameCounter )
@@ -276,6 +359,15 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 				}
 
 				long now = Stopwatch.GetTimestamp();
+
+				// receive side timestamp: correct even if the writer lags behind
+				if ( ! this.noData && ( now - Interlocked.Read( ref this.lastReceiveTicks ) > noDataTicks ) )
+				{
+					this.noDataPeriods++;
+					writeEvent( now, "no_data", noDataDetail() );
+					this.noData = true;
+				}
+
 				if ( now - lastFlush >= flushTicks )
 				{
 					this.dataWriter.Flush();
@@ -285,7 +377,8 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 			}
 
 			writeEvent( Stopwatch.GetTimestamp(), "stop",
-			            $"frames={this.FramesWritten}; gaps={this.GapCount}; missing={this.MissingFrames}; errors={this.ErrorCount}" );
+			            $"frames={this.FramesWritten}; gaps={this.GapCount}; missing={this.MissingFrames}; errors={this.ErrorCount}; " +
+			            $"no_data_periods={this.noDataPeriods}" + ( ( this.FramesWritten == 0 ) ? "; empty=true" : "" ) );
 			this.dataWriter.Flush();
 			this.eventsWriter.Flush();
 		}
@@ -317,6 +410,12 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 			        "{0},{1},{2:F3},{3:F3},{4:F3},{5:F3},{6:F6},{7:F6},{8:F6}",
 			        prefix, m.Id, m.Quality, m.Loc[ 0 ], m.Loc[ 1 ], m.Loc[ 2 ], p.x, p.y, p.z ) );
 		}
+	}
+
+	private string noDataDetail()
+	{
+		return String.Format( CultureInfo.InvariantCulture, "no frame for {0:F1} s; check DTrack component, UDP port {1} and DTRACK output",
+		                      this.noDataTimeoutSeconds, this.listenPort );
 	}
 
 	private void writeEvent( long ticks, string type, string detail )
