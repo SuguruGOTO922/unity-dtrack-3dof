@@ -8,6 +8,9 @@
  * Frames are taken directly from the DTrack receive thread and written by a dedicated writer
  * thread, independent of Unity's frame rate or main thread stalls.
  *
+ * Recording is controlled from scripts: StartRecording() creates a new file each time,
+ * StopRecording() writes all received frames and closes the files (also done on disable/destroy).
+ *
  * Data file (one row per marker; one row with n_markers = 0 for frames without markers):
  *   recv_time_s,dtrack_frame,dtrack_ts,n_markers,marker_id,quality,x_mm,y_mm,z_mm,x,y,z
  *   recv_time_s : receive time (seconds since start of recording, monotonic high resolution clock)
@@ -64,11 +67,14 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 	private long missingFrames;
 	private long errorCount;
 
-	// Paths of the files currently written (null if not recording).
-	public string CurrentFilePath  { get; private set; }
-	public string CurrentEventsFilePath  { get; private set; }
+	// Paths of the files of the current or most recent recording (null before the first recording).
+	public string FilePath  { get; private set; }
+	public string EventsFilePath  { get; private set; }
 
-	// Statistics of the current recording (thread-safe).
+	// True between a successful StartRecording() and StopRecording().
+	public bool IsRecording => ( this.queue != null );
+
+	// Statistics of the current or most recent recording (thread-safe).
 	public long FramesWritten => Interlocked.Read( ref this.framesWritten );
 	public long GapCount => Interlocked.Read( ref this.gapCount );
 	public long MissingFrames => Interlocked.Read( ref this.missingFrames );  // sum of frame counter gaps
@@ -76,8 +82,19 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 	public int QueueLength => ( this.queue != null ) ? this.queue.Count : 0;  // frames waiting to be written
 
 
-	void OnEnable()
+	// Start recording to a new file (call on the main thread).
+	//
+	// path: CSV file path; null or empty: 'filePath', or 'dtrack_markers_<date>_<time>.csv' in Application.persistentDataPath
+	// Returns false if already recording or if recording could not be started.
+
+	public bool StartRecording( string path = null )
 	{
+		if ( this.IsRecording )
+		{
+			Debug.LogWarning( $"DTrackMarkerLogger: already recording to {this.FilePath}" );
+			return false;
+		}
+
 #if UNITY_2023_1_OR_NEWER
 		this.dtrackSource = FindAnyObjectByType< DTrack >();
 #else
@@ -86,12 +103,13 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		if ( this.dtrackSource == null )
 		{
 			Debug.LogError( "DTrackMarkerLogger: cannot find DTrack object, not recording" );
-			return;
+			return false;
 		}
 
-		string path = String.IsNullOrEmpty( this.filePath )
-				? Path.Combine( Application.persistentDataPath, $"dtrack_markers_{DateTime.Now:yyyyMMdd_HHmmss}.csv" )
-				: this.filePath;
+		if ( String.IsNullOrEmpty( path ) )  path = this.filePath;
+		if ( String.IsNullOrEmpty( path ) )
+			path = Path.Combine( Application.persistentDataPath, $"dtrack_markers_{DateTime.Now:yyyyMMdd_HHmmss}.csv" );
+
 		string eventsPath = Path.Combine( Path.GetDirectoryName( Path.GetFullPath( path ) ),
 		                                  Path.GetFileNameWithoutExtension( path ) + "_events.csv" );
 
@@ -106,7 +124,7 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		{
 			Debug.LogError( $"DTrackMarkerLogger: cannot open {path}: {e.Message}" );
 			closeFiles();
-			return;
+			return false;
 		}
 
 		this.dataWriter.WriteLine( "recv_time_s,dtrack_frame,dtrack_ts,n_markers,marker_id,quality,x_mm,y_mm,z_mm,x,y,z" );
@@ -126,19 +144,24 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		this.writerThread = new Thread( WriterThread ) { IsBackground = true, Name = "DTrackMarkerLogger" };
 		this.writerThread.Start();
 
-		this.CurrentFilePath = path;
-		this.CurrentEventsFilePath = eventsPath;
+		this.FilePath = path;
+		this.EventsFilePath = eventsPath;
 
 		// start receiving only when everything is ready:
 		this.dtrackSource.ReceiveError += this.OnReceiveError;
 		this.dtrackSource.RegisterReceiver( this );
 
 		Debug.Log( $"DTrackMarkerLogger: recording to {path}" );
+		return true;
 	}
 
-	void OnDisable()
+	// Stop recording (call on the main thread); writes all frames received so far and closes the files.
+	//
+	// Does nothing if not recording. Called automatically when this component is disabled or destroyed.
+
+	public void StopRecording()
 	{
-		if ( this.queue == null )  return;  // not recording
+		if ( ! this.IsRecording )  return;
 
 		if ( this.dtrackSource != null )
 		{
@@ -155,11 +178,18 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		this.queue = null;
 		this.writerThread = null;
 
-		Debug.Log( $"DTrackMarkerLogger: stopped recording {this.CurrentFilePath} ({this.FramesWritten} frames, " +
+		Debug.Log( $"DTrackMarkerLogger: stopped recording {this.FilePath} ({this.FramesWritten} frames, " +
 		           $"{this.GapCount} gaps with {this.MissingFrames} missing frames, {this.ErrorCount} receive errors)" );
+	}
 
-		this.CurrentFilePath = null;
-		this.CurrentEventsFilePath = null;
+	void OnDisable()
+	{
+		StopRecording();
+	}
+
+	void OnDestroy()
+	{
+		StopRecording();
 	}
 
 
