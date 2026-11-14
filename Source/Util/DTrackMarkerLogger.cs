@@ -25,6 +25,8 @@
  *
  * Missing data: StartRecording() fails if the DTrack object is disabled or could not open its UDP port;
  * while recording, 'no_data' is reported if no frame arrives for 'noDataTimeoutSeconds' (DataReceivingChanged).
+ * Write failures (e.g. disk full): recording stops automatically, RecordingFailed is invoked, LastError is set;
+ * frames received after the failure are dropped (DroppedFrames) instead of filling memory.
  */
 
 using System;
@@ -77,6 +79,10 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 	private int noDataPeriods;
 	private bool notifiedReceivingData;  // state last reported on the main thread
 
+	private volatile bool writeFailed;  // writing failed, recording is incomplete
+	private volatile string lastError;
+	private long droppedFrames;
+
 	private const int MaxFileNumber = 9999;  // highest number appended to file names
 
 	private long framesWritten;
@@ -105,6 +111,14 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 
 	// Invoked on the main thread when data stop (false) or resume (true) arriving while recording.
 	public event Action< DTrackMarkerLogger, bool > DataReceivingChanged;
+
+	// Write failure of the current or most recent recording (Failed, LastError) and frames dropped after it.
+	public bool Failed => this.writeFailed;
+	public string LastError => this.lastError;
+	public long DroppedFrames => Interlocked.Read( ref this.droppedFrames );
+
+	// Invoked on the main thread (with LastError) after a write failure stopped the recording.
+	public event Action< DTrackMarkerLogger, string > RecordingFailed;
 
 
 	// Start recording to a new file (call on the main thread).
@@ -178,6 +192,9 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		this.noData = false;
 		this.noDataPeriods = 0;
 		this.notifiedReceivingData = true;
+		this.writeFailed = false;
+		this.lastError = null;
+		this.droppedFrames = 0;
 		writeEvent( this.startTicks, "start",
 		            $"time={DateTime.Now:o}; stopwatch_hz={Stopwatch.Frequency}; port={this.dtrackSource.listenPort}; " +
 		            $"coordinates={this.dtrackSource.dTrackCoordinates}" +
@@ -206,20 +223,32 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 	{
 		if ( ! this.IsRecording )  return;
 
-		if ( this.dtrackSource != null )
+		try
 		{
-			this.dtrackSource.UnregisterReceiver( this );
-			this.dtrackSource.ReceiveError -= this.OnReceiveError;
+			if ( this.dtrackSource != null )
+			{
+				this.dtrackSource.UnregisterReceiver( this );
+				this.dtrackSource.ReceiveError -= this.OnReceiveError;
+			}
+
+			this.queue.CompleteAdding();
+			this.writerThread.Join();  // writes all queued frames before closing (returns at once if writing failed)
+		}
+		finally  // always leave a clean, stopped state
+		{
+			closeFiles();
+
+			this.queue.Dispose();
+			this.queue = null;
+			this.writerThread = null;
 		}
 
-		this.queue.CompleteAdding();
-		this.writerThread.Join();  // writes all queued frames before closing
-
-		closeFiles();
-
-		this.queue.Dispose();
-		this.queue = null;
-		this.writerThread = null;
+		if ( this.writeFailed )
+		{
+			Debug.LogError( $"DTrackMarkerLogger: recording {this.FilePath} is INCOMPLETE: {this.lastError} " +
+			                $"({this.FramesWritten} frames written, {this.DroppedFrames} frames dropped after the failure)" );
+			return;
+		}
 
 		Debug.Log( $"DTrackMarkerLogger: stopped recording {this.FilePath} ({this.FramesWritten} frames, " +
 		           $"{this.GapCount} gaps with {this.MissingFrames} missing frames, {this.ErrorCount} receive errors, " +
@@ -234,6 +263,13 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 	void Update()
 	{
 		if ( ! this.IsRecording )  return;
+
+		if ( this.writeFailed )  // stop and report on the main thread
+		{
+			StopRecording();
+			this.RecordingFailed?.Invoke( this, this.lastError );
+			return;
+		}
 
 		bool receiving = ! this.noData;
 		if ( receiving == this.notifiedReceivingData )  return;
@@ -279,6 +315,12 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 
 	private void enqueue( Item item )
 	{
+		if ( this.writeFailed )  // writer thread is gone: don't fill memory
+		{
+			if ( item.frame != null )  Interlocked.Increment( ref this.droppedFrames );
+			return;
+		}
+
 		try
 		{
 			this.queue?.Add( item );
@@ -384,7 +426,17 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		}
 		catch ( Exception e )
 		{
-			Debug.LogError( $"DTrackMarkerLogger: writing failed, recording is incomplete: {e}" );
+			this.lastError = $"writing failed: {e.Message}";
+			this.writeFailed = true;
+
+			try  // record the failure if the events file is still writable
+			{
+				writeEvent( Stopwatch.GetTimestamp(), "write_error", e.Message );
+				this.eventsWriter.Flush();
+			}
+			catch ( Exception )
+			{
+			}
 		}
 	}
 
@@ -479,11 +531,36 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 
 	private void closeFiles()
 	{
-		if ( this.dataWriter != null )  this.dataWriter.Close();
-		if ( this.eventsWriter != null )  this.eventsWriter.Close();
+		closeFile( this.dataWriter );
+		closeFile( this.eventsWriter );
 
 		this.dataWriter = null;
 		this.eventsWriter = null;
+	}
+
+	// Close a file; a failure (e.g. writing the last buffered data) marks the recording as failed.
+
+	private void closeFile( StreamWriter writer )
+	{
+		if ( writer == null )  return;
+
+		try
+		{
+			writer.Close();
+		}
+		catch ( Exception e )
+		{
+			if ( ! this.writeFailed )  this.lastError = $"closing file failed: {e.Message}";
+			this.writeFailed = true;
+
+			try  // release the file handle without writing
+			{
+				writer.BaseStream.Dispose();
+			}
+			catch ( Exception )
+			{
+			}
+		}
 	}
 }
 
