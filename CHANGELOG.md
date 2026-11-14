@@ -1,6 +1,14 @@
 
 # List of ART DTRACK Plugin for Unity Game Engine releases
 
+## v1.2.0-3dof.1 (2026-11-14, local fork, based on v1.1.3)
+
+- SDK parses single 3DOF markers ('3d'): `DTrackMarker`, `Frame.Markers` / `GetMarker()`
+- New `DTrackReceiverMarkers`: assigns markers to a fixed set of GameObjects by
+  nearest-neighbour tracking (DTRACK marker IDs are not persistent)
+- New `DTrackMarkerLogger`: records marker positions to CSV
+- New sample 'Marker Tracking Scene'
+
 ## v1.1.3 (2024-05-03)
 
 - (Optionally) enables UDP connection through stateful firewall

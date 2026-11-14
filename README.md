@@ -1,6 +1,7 @@
 # ART DTRACK Plugin for Unity Game Engine 2019 or later
 
-**Version v1.1.3**
+**Version v1.2.0-3dof.1** (local fork of v1.1.3 adding single 3DOF marker tracking,
+see [**Applying Single 3DOF Marker Data**](#pluginconfigurationmarkers))
 
 This is a component for Unity 2019 or later with the purpose of
 native integration of the Advanced Realtime Tracking (ART) DTRACK
@@ -14,7 +15,8 @@ access to DTRACK realtime tracking data, that is sent over network using
 UDP/IP datagrams. Each UDP packet contains one frame of tracking
 data including all outputs activated via the DTRACK software (see
 section [**DTRACK Configuration**](#dtrackconfiguration)). This package currently
-supports the DTRACK Standard Body ('6d'), Flystick ('6df2') and Fingertracking ('gl') data formats.
+supports the DTRACK Standard Body ('6d'), Flystick ('6df2'), Fingertracking ('gl') and
+single 3DOF marker ('3d') data formats.
 
 ## Features <a name="features"></a>
 
@@ -197,8 +199,8 @@ these steps:
 - Activate a channel if needed
 - Fill in hostname or IP address, and UDP port number of the device receiving tracking data
 - Select outputs you are interested in (i.e., currently frame counter 'fr',
-6DOF Standard Body '6d', Flystick '6df2' and Fingertracking 'gl' are
-supported)
+6DOF Standard Body '6d', Flystick '6df2', Fingertracking 'gl' and
+single 3DOF markers '3d' are supported)
 
 ![Figure: DTRACK3 output dialog](Documentation~/images/dtrack-output.png)
 <br>
@@ -344,6 +346,33 @@ The elements of *Fingers* have to be ordered as: thumb, index, middle, ring, pin
 If the real size of the person's hand is differing too much from the hand model's size, it might be useful
 to modify the *Scale* factor in the **Transform** box of the hand's root object (**Hand_0X_L** or **Hand_0X_R**).
 If setting *Automatic Scale* is enabled, the hand mapper script tries to find a suitable value automatically.
+
+### Applying Single 3DOF Marker Data <a name="pluginconfigurationmarkers"></a>
+
+Activate output '3d' in DTRACK. DTRACK assigns the IDs of single markers per frame:
+an ID changes whenever a marker is lost and found again. Therefore markers are not
+selected by ID but assigned to game objects by nearest-neighbour tracking.
+
+Add the DTrack script **DTrackReceiverMarkers** to a game object and fill its list
+*Targets* with the game objects that shall follow single markers (one marker each):
+
+- Place each target near the position where its marker is expected first; an unassigned
+  target picks up the nearest free marker (within *Acquire Radius*, 0 = unlimited).
+- An assigned target follows the nearest marker that moved less than *Max Jump Distance*
+  (meter) since the previous DTRACK frame.
+- If its marker is missing for longer than *Lost Timeout* (seconds), the target becomes
+  unassigned again; *Hide When Lost* deactivates it meanwhile.
+
+Scripts can read `Slots` (per target: `IsAssigned`, `IsTracked`, `DTrackId`, `Position`),
+`AllMarkerPositions` / `AllMarkerIds` (all markers of the latest frame) and subscribe to
+event `MarkersUpdated`. Positions are Unity world coordinates in meter.
+
+Attach **DTrackMarkerLogger** to the same game object to record a CSV file
+(`unity_time,dtrack_frame,dtrack_timestamp,slot,dtrack_id,tracked,x,y,z`) to *File Path*,
+or to `Application.persistentDataPath` if empty. *Log All Markers* additionally records
+every marker with slot -1.
+
+A ready-made scene is available as package sample 'Marker Tracking Scene'.
 
 <br><br><br>
 
