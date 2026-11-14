@@ -84,6 +84,8 @@ public class DTrack : MonoBehaviour
 
 	private Thread thread;
 	private bool runReceiveThread = false;
+	public bool IsStarted  { get; private set; }  // local extension: Start() has tried to open the UDP socket
+	public bool IsReceiving => this.runReceiveThread;  // local extension: UDP socket open and receive loop running
 
 
 	void OnValidate()
@@ -103,6 +105,7 @@ public class DTrack : MonoBehaviour
 
 	void Start()
 	{
+		this.IsStarted = true;  // local extension
 		this.sdk = new DTrackSDK.DTrackSDK( this.listenPort );
 		if ( ! this.sdk.IsDataInterfaceValid )
 		{
