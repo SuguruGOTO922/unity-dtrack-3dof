@@ -38,14 +38,18 @@ single 3DOF marker ('3d') data formats.
 
 ### Installing this fork <a name="installingfork"></a>
 
-Add the package to your project's `Packages/manifest.json`, preferably pinned to a release tag:
+Requires [git](https://git-scm.com/) to be installed (restart Unity Hub/Editor afterwards).
+In the Package Manager choose *+* &rarr; *Add package from git URL...* and enter the repository URL
+with a release tag, or add it to your project's `Packages/manifest.json`:
 
 ```json
-"io.github.sugurugoto922.dtrack": "git@github.com:SuguruGOTO922/unity-dtrack-3dof.git#v1.2.0-3dof.6"
+"io.github.sugurugoto922.dtrack": "https://github.com/SuguruGOTO922/unity-dtrack-3dof.git#v1.2.0-3dof.6"
 ```
 
-While the repository is private, the machine needs SSH access to it. Alternatively reference a
-local clone: `"io.github.sugurugoto922.dtrack": "file:/path/to/unity-dtrack-3dof"`.
+Pin a release tag (see [CHANGELOG.md](CHANGELOG.md)) so that you know which version recorded your data;
+to update, change the tag. The SSH form `git@github.com:SuguruGOTO922/unity-dtrack-3dof.git#<tag>`
+works as well. To work on the package, reference a local clone instead:
+`"io.github.sugurugoto922.dtrack": "file:/path/to/unity-dtrack-3dof"`.
 Don't install this fork together with the official package `com.ar-tracking.dtrack` (same classes).
 
 The following sections describe the ways to get the **official** ART DTRACK Plugin
