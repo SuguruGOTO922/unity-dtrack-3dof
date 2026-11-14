@@ -1,7 +1,14 @@
-# ART DTRACK Plugin for Unity Game Engine 2019 or later
+# DTRACK Plugin for Unity: 3DOF marker fork (unofficial)
 
-**Version v1.2.0-3dof.5** (local fork of v1.1.3 adding single 3DOF marker tracking,
-see [**Applying Single 3DOF Marker Data**](#pluginconfigurationmarkers))
+**Version v1.2.0-3dof.6**, package `io.github.sugurugoto922.dtrack`
+
+> **Unofficial fork** of the [ART DTRACK Plugin for Unity](https://github.com/ar-tracking/UnityDTrackPlugin)
+> v1.1.3 by Advanced Realtime Tracking GmbH & Co. KG, adding single 3DOF marker ('3d') tracking
+> (see [**Applying Single 3DOF Marker Data**](#pluginconfigurationmarkers)) and lossless recording of
+> marker data (see [**Recording Marker Data**](#recording-marker-data)).
+> It is not affiliated with or endorsed by Advanced Realtime Tracking GmbH & Co. KG.
+> Licensed under the BSD-3-Clause license (see [LICENSE.md](LICENSE.md)), like the original.
+> The rest of this document is the original documentation, extended for this fork.
 
 This is a component for Unity 2019 or later with the purpose of
 native integration of the Advanced Realtime Tracking (ART) DTRACK
@@ -29,7 +36,20 @@ single 3DOF marker ('3d') data formats.
 
 ## Installing the ART DTRACK Plugin <a name="installing"></a>
 
-There are several ways to get the ART DTRACK Plugin.
+### Installing this fork <a name="installingfork"></a>
+
+Add the package to your project's `Packages/manifest.json`, preferably pinned to a release tag:
+
+```json
+"io.github.sugurugoto922.dtrack": "git@github.com:SuguruGOTO922/unity-dtrack-3dof.git#v1.2.0-3dof.6"
+```
+
+While the repository is private, the machine needs SSH access to it. Alternatively reference a
+local clone: `"io.github.sugurugoto922.dtrack": "file:/path/to/unity-dtrack-3dof"`.
+Don't install this fork together with the official package `com.ar-tracking.dtrack` (same classes).
+
+The following sections describe the ways to get the **official** ART DTRACK Plugin
+(without the extensions of this fork).
 
 ### Unity Asset Store <a name="assetstore"></a>
 

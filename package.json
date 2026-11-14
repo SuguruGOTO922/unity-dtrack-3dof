@@ -1,18 +1,19 @@
 {
-    "name": "com.ar-tracking.dtrack",
-    "version": "1.2.0-3dof.5",
-    "displayName": "ART DTRACK Plugin",
-    "description": "Plugin for integration of Advanced Realtime Tracking DTRACK tracking solutions. Local fork adding single 3DOF marker ('3d') tracking.",
+    "name": "io.github.sugurugoto922.dtrack",
+    "version": "1.2.0-3dof.6",
+    "displayName": "DTRACK Plugin for Unity (3DOF marker fork)",
+    "description": "Unofficial fork of the ART DTRACK Plugin for Unity v1.1.3, adding single 3DOF marker tracking and lossless recording. Not affiliated with or endorsed by Advanced Realtime Tracking GmbH & Co. KG.",
     "unity": "2019.4",
     "keywords": [
         "art", "dtrack", "tracking",
-        "integration", "interaction"
+        "integration", "interaction",
+        "3dof", "marker"
     ],
-    "documentationUrl": "https://github.com/ar-tracking/UnityDTrackPlugin/blob/master/README.md",
-    "changelogUrl": "https://github.com/ar-tracking/UnityDTrackPlugin/blob/master/CHANGELOG.md",
+    "documentationUrl": "https://github.com/SuguruGOTO922/unity-dtrack-3dof/blob/main/README.md",
+    "changelogUrl": "https://github.com/SuguruGOTO922/unity-dtrack-3dof/blob/main/CHANGELOG.md",
     "license": "BSD-3-Clause",
-    "licensesUrl": "https://github.com/ar-tracking/UnityDTrackPlugin/blob/master/LICENSE.md",
-    "author": "Advanced Realtime Tracking GmbH & Co. KG (https://ar-tracking.com/)",
+    "licensesUrl": "https://github.com/SuguruGOTO922/unity-dtrack-3dof/blob/main/LICENSE.md",
+    "author": "Suguru Goto (https://github.com/SuguruGOTO922)",
     "samples": [
         {
             "displayName": "Example Scene",

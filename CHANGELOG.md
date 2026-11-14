@@ -1,6 +1,13 @@
 
 # List of ART DTRACK Plugin for Unity Game Engine releases
 
+## v1.2.0-3dof.6 (2026-11-14, unofficial fork)
+
+- Package renamed to `io.github.sugurugoto922.dtrack` ("DTRACK Plugin for Unity (3DOF marker fork)"),
+  hosted at https://github.com/SuguruGOTO922/unity-dtrack-3dof; marked as unofficial fork of the
+  ART DTRACK Plugin v1.1.3 in package.json and README; installation instructions for this fork
+- Copyright notice for the fork's additions (LICENSE.md and new source files); license unchanged (BSD-3-Clause)
+
 ## v1.2.0-3dof.5 (2026-11-14, local fork)
 
 - `DTrackMarkerLogger`: `StartRecording()` fails if DTrack is disabled or its UDP port could not be opened;
