@@ -1,6 +1,6 @@
 {
     "name": "com.ar-tracking.dtrack",
-    "version": "1.2.0-3dof.1",
+    "version": "1.2.0-3dof.2",
     "displayName": "ART DTRACK Plugin",
     "description": "Plugin for integration of Advanced Realtime Tracking DTRACK tracking solutions. Local fork adding single 3DOF marker ('3d') tracking.",
     "unity": "2019.4",

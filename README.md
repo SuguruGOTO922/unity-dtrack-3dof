@@ -1,6 +1,6 @@
 # ART DTRACK Plugin for Unity Game Engine 2019 or later
 
-**Version v1.2.0-3dof.1** (local fork of v1.1.3 adding single 3DOF marker tracking,
+**Version v1.2.0-3dof.2** (local fork of v1.1.3 adding single 3DOF marker tracking,
 see [**Applying Single 3DOF Marker Data**](#pluginconfigurationmarkers))
 
 This is a component for Unity 2019 or later with the purpose of
@@ -367,10 +367,28 @@ Scripts can read `Slots` (per target: `IsAssigned`, `IsTracked`, `DTrackId`, `Po
 `AllMarkerPositions` / `AllMarkerIds` (all markers of the latest frame) and subscribe to
 event `MarkersUpdated`. Positions are Unity world coordinates in meter.
 
-Attach **DTrackMarkerLogger** to the same game object to record a CSV file
-(`unity_time,dtrack_frame,dtrack_timestamp,slot,dtrack_id,tracked,x,y,z`) to *File Path*,
-or to `Application.persistentDataPath` if empty. *Log All Markers* additionally records
-every marker with slot -1.
+#### Recording Marker Data
+
+Attach **DTrackMarkerLogger** to any game object to record the single markers of
+**every received DTRACK frame**. Frames are taken directly from the receive thread and
+written by a separate thread, so recording does not depend on Unity's frame rate, main thread
+stalls or *Run In Background*. (`DTrackReceiverMarkers` in contrast only processes the
+latest frame per Unity frame, which is fine for display but not for recording.)
+
+Data are written to *File Path*, or to `Application.persistentDataPath` if empty, one row per
+marker (frames without markers get one row with `n_markers` = 0, so every frame appears):
+
+`recv_time_s,dtrack_frame,dtrack_ts,n_markers,marker_id,quality,x_mm,y_mm,z_mm,x,y,z`
+
+- `recv_time_s`: receive time in seconds since start of recording (monotonic, high resolution)
+- `dtrack_ts`: DTRACK timestamp, -1 if output 'ts' is not activated
+- `x_mm` .. `z_mm`: raw DTRACK position (mm, room coordinates); `x` .. `z`: Unity world coordinates (meter)
+
+A second file `<name>_events.csv` (`recv_time_s,type,detail`) lists `start` (wall clock time,
+port, coordinates), `gap` (jumps of the DTRACK frame counter, i.e. frames lost before
+reaching Unity), `counter_reset`, `receive_error` (packets that could not be received or
+parsed), and a `stop` summary. Activate DTRACK outputs **'fr'** (required to detect gaps) and
+**'ts'**. Files are flushed every *Flush Interval Seconds* and completely on disable.
 
 A ready-made scene is available as package sample 'Marker Tracking Scene'.
 

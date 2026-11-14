@@ -1,6 +1,13 @@
 
 # List of ART DTRACK Plugin for Unity Game Engine releases
 
+## v1.2.0-3dof.2 (2026-11-14, local fork)
+
+- `DTrackMarkerLogger` records every received frame (receive thread + writer thread) with raw
+  DTRACK values, receive time, and an events file reporting frame counter gaps and receive errors;
+  slot based logging removed
+- `DTrack`: `RegisterReceiver`/`UnregisterReceiver` for IDTrackReceiver components, event `ReceiveError`
+
 ## v1.2.0-3dof.1 (2026-11-14, local fork, based on v1.1.3)
 
 - SDK parses single 3DOF markers ('3d'): `DTrackMarker`, `Frame.Markers` / `GetMarker()`
