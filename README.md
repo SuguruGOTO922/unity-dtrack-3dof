@@ -1,6 +1,6 @@
 # ART DTRACK Plugin for Unity Game Engine 2019 or later
 
-**Version v1.2.0-3dof.2** (local fork of v1.1.3 adding single 3DOF marker tracking,
+**Version v1.2.0-3dof.3** (local fork of v1.1.3 adding single 3DOF marker tracking,
 see [**Applying Single 3DOF Marker Data**](#pluginconfigurationmarkers))
 
 This is a component for Unity 2019 or later with the purpose of
@@ -370,12 +370,27 @@ event `MarkersUpdated`. Positions are Unity world coordinates in meter.
 #### Recording Marker Data
 
 Attach **DTrackMarkerLogger** to any game object to record the single markers of
-**every received DTRACK frame**. Frames are taken directly from the receive thread and
+**every received DTRACK frame**. Recording does not start automatically; control it from
+your scripts:
+
+```csharp
+DTrackMarkerLogger logger = ...;
+logger.StartRecording();              // new file each call; optional argument: file path
+...
+logger.StopRecording();               // writes all received frames and closes the files
+Debug.Log( $"{logger.FilePath}: {logger.FramesWritten} frames, {logger.MissingFrames} missing" );
+```
+
+`StartRecording()` returns false if already recording or if recording cannot be started.
+Disabling or destroying the component (e.g. leaving Play mode) stops a running recording
+and writes all data. `IsRecording`, `FilePath`, `EventsFilePath` and the statistics
+(`FramesWritten`, `GapCount`, `MissingFrames`, `ErrorCount`) remain readable after stopping. Frames are taken directly from the receive thread and
 written by a separate thread, so recording does not depend on Unity's frame rate, main thread
 stalls or *Run In Background*. (`DTrackReceiverMarkers` in contrast only processes the
 latest frame per Unity frame, which is fine for display but not for recording.)
 
-Data are written to *File Path*, or to `Application.persistentDataPath` if empty, one row per
+Data are written to the path given to `StartRecording()`, else to *File Path*, or to
+`Application.persistentDataPath` if both are empty, one row per
 marker (frames without markers get one row with `n_markers` = 0, so every frame appears):
 
 `recv_time_s,dtrack_frame,dtrack_ts,n_markers,marker_id,quality,x_mm,y_mm,z_mm,x,y,z`
@@ -388,7 +403,7 @@ A second file `<name>_events.csv` (`recv_time_s,type,detail`) lists `start` (wal
 port, coordinates), `gap` (jumps of the DTRACK frame counter, i.e. frames lost before
 reaching Unity), `counter_reset`, `receive_error` (packets that could not be received or
 parsed), and a `stop` summary. Activate DTRACK outputs **'fr'** (required to detect gaps) and
-**'ts'**. Files are flushed every *Flush Interval Seconds* and completely on disable.
+**'ts'**. Files are flushed every *Flush Interval Seconds* and completely on `StopRecording()`.
 
 A ready-made scene is available as package sample 'Marker Tracking Scene'.
 

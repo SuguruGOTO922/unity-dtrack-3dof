@@ -1,6 +1,12 @@
 
 # List of ART DTRACK Plugin for Unity Game Engine releases
 
+## v1.2.0-3dof.3 (2026-11-14, local fork)
+
+- `DTrackMarkerLogger` no longer records while enabled: `StartRecording()` / `StopRecording()`
+  control recording (new file per call); `IsRecording`; `CurrentFilePath`/`CurrentEventsFilePath`
+  renamed to `FilePath`/`EventsFilePath`
+
 ## v1.2.0-3dof.2 (2026-11-14, local fork)
 
 - `DTrackMarkerLogger` records every received frame (receive thread + writer thread) with raw
