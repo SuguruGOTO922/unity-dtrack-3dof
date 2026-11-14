@@ -2,6 +2,8 @@
  *
  * Script recording single 3DOF marker data of EVERY received DTRACK frame to CSV files.
  *
+ * Copyright (c) 2026 Suguru Goto
+ *
  * Local extension of the ART DTRACK Plugin (not part of the upstream release),
  * distributed under the same BSD-3-Clause license as this package.
  *

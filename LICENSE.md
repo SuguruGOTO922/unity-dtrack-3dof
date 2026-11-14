@@ -1,4 +1,5 @@
 Copyright (c) 2019-2023 Advanced Realtime Tracking GmbH & Co. KG
+Copyright (c) 2026 Suguru Goto (single 3DOF marker tracking and recording extensions)
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:

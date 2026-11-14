@@ -2,6 +2,8 @@
  *
  * Parsing single 3DOF markers of DTRACK output data.
  *
+ * Copyright (c) 2026 Suguru Goto
+ *
  * Local extension of the ART DTRACK Plugin (not part of the upstream release),
  * distributed under the same BSD-3-Clause license as this package.
  *

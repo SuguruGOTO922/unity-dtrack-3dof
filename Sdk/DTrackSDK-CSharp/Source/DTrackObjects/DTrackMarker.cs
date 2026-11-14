@@ -2,6 +2,8 @@
  *
  * Data object containing DTRACK output data of one single 3DOF marker.
  *
+ * Copyright (c) 2026 Suguru Goto
+ *
  * Local extension of the ART DTRACK Plugin (not part of the upstream release),
  * distributed under the same BSD-3-Clause license as this package.
  *
