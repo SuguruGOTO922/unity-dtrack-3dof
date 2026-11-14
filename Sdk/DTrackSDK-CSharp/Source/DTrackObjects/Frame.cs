@@ -59,6 +59,10 @@ public class Frame
 	public Dictionary< int, DTrackHand > Hands  { get; set; }
 	public int NumHands  { get; set; }  // number of calibrated Fingertracking hands (as far as known)
 
+	// Single 3DOF markers (local extension); IDs are assigned by DTRACK per frame and are not persistent
+	public Dictionary< int, DTrackMarker > Markers  { get; set; }
+	public int NumMarkers  { get; set; }  // number of markers in this frame
+
 
 	public Frame()
 	{
@@ -72,6 +76,7 @@ public class Frame
 		this.NumFlysticks = 0;
 		this.NumMeaTools = 0;
 		this.NumHands = 0;
+		this.NumMarkers = 0;
 	}
 
 
@@ -119,6 +124,18 @@ public class Frame
 
 		DTrackHand hand;
 		if ( this.Hands.TryGetValue( id, out hand ) )  return hand;
+
+		return null;
+	}
+
+	// Get single 3DOF marker data (local extension).
+
+	public DTrackMarker GetMarker( int id )
+	{
+		if ( this.Markers == null )  return null;
+
+		DTrackMarker marker;
+		if ( this.Markers.TryGetValue( id, out marker ) )  return marker;
 
 		return null;
 	}

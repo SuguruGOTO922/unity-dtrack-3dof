@@ -100,6 +100,12 @@ public class Parser
 					frame.Hands = HandParser.Parse( line, out num );
 					frame.NumHands = num;
 				}
+				else if ( line.StartsWith( Statics.Prefix_3d ) )  // local extension
+				{
+					int num;
+					frame.Markers = MarkerParser.Parse( line, out num );
+					frame.NumMarkers = num;
+				}
 			}
 			catch ( Exception e )
 			{

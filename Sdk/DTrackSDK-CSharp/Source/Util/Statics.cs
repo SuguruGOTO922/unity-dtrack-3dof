@@ -75,6 +75,7 @@ public class Statics
 	public const string Prefix_6dmt2 = "6dmt2 ";
 	public const string Prefix_glcal = "glcal ";
 	public const string Prefix_gl = "gl ";
+	public const string Prefix_3d = "3d ";  // local extension: single 3DOF markers
 }
 
 
