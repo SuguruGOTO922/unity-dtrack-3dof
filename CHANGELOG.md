@@ -1,6 +1,11 @@
 
 # List of ART DTRACK Plugin for Unity Game Engine releases
 
+## v1.2.0-3dof.4 (2026-11-14, local fork)
+
+- `DTrackMarkerLogger` never overwrites existing files: appends `_1`, `_2`, ... to the file name
+  (atomic creation with `FileMode.CreateNew`)
+
 ## v1.2.0-3dof.3 (2026-11-14, local fork)
 
 - `DTrackMarkerLogger` no longer records while enabled: `StartRecording()` / `StopRecording()`

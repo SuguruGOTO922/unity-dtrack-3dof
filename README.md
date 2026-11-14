@@ -1,6 +1,6 @@
 # ART DTRACK Plugin for Unity Game Engine 2019 or later
 
-**Version v1.2.0-3dof.3** (local fork of v1.1.3 adding single 3DOF marker tracking,
+**Version v1.2.0-3dof.4** (local fork of v1.1.3 adding single 3DOF marker tracking,
 see [**Applying Single 3DOF Marker Data**](#pluginconfigurationmarkers))
 
 This is a component for Unity 2019 or later with the purpose of
@@ -390,7 +390,10 @@ stalls or *Run In Background*. (`DTrackReceiverMarkers` in contrast only process
 latest frame per Unity frame, which is fine for display but not for recording.)
 
 Data are written to the path given to `StartRecording()`, else to *File Path*, or to
-`Application.persistentDataPath` if both are empty, one row per
+`Application.persistentDataPath` if both are empty. Existing files are never overwritten: if
+`<name>.csv` or `<name>_events.csv` exists, `<name>_1.csv`, `<name>_2.csv`, ... are used instead
+(the actual path is available as `FilePath`, and the `start` event then lists `requested_path`).
+Data are written one row per
 marker (frames without markers get one row with `n_markers` = 0, so every frame appears):
 
 `recv_time_s,dtrack_frame,dtrack_ts,n_markers,marker_id,quality,x_mm,y_mm,z_mm,x,y,z`
