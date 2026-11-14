@@ -1,6 +1,6 @@
 # ART DTRACK Plugin for Unity Game Engine 2019 or later
 
-**Version v1.2.0-3dof.4** (local fork of v1.1.3 adding single 3DOF marker tracking,
+**Version v1.2.0-3dof.5** (local fork of v1.1.3 adding single 3DOF marker tracking,
 see [**Applying Single 3DOF Marker Data**](#pluginconfigurationmarkers))
 
 This is a component for Unity 2019 or later with the purpose of
@@ -381,7 +381,9 @@ logger.StopRecording();               // writes all received frames and closes t
 Debug.Log( $"{logger.FilePath}: {logger.FramesWritten} frames, {logger.MissingFrames} missing" );
 ```
 
-`StartRecording()` returns false if already recording or if recording cannot be started.
+`StartRecording()` returns false (with an error in the Console) if already recording, if the
+DTrack object is missing or disabled, if DTrack could not open its UDP port (e.g. used by
+another application), or if the files cannot be created.
 Disabling or destroying the component (e.g. leaving Play mode) stops a running recording
 and writes all data. `IsRecording`, `FilePath`, `EventsFilePath` and the statistics
 (`FramesWritten`, `GapCount`, `MissingFrames`, `ErrorCount`) remain readable after stopping. Frames are taken directly from the receive thread and
@@ -405,8 +407,23 @@ marker (frames without markers get one row with `n_markers` = 0, so every frame 
 A second file `<name>_events.csv` (`recv_time_s,type,detail`) lists `start` (wall clock time,
 port, coordinates), `gap` (jumps of the DTRACK frame counter, i.e. frames lost before
 reaching Unity), `counter_reset`, `receive_error` (packets that could not be received or
-parsed), and a `stop` summary. Activate DTRACK outputs **'fr'** (required to detect gaps) and
-**'ts'**. Files are flushed every *Flush Interval Seconds* and completely on `StopRecording()`.
+parsed), `no_data` / `data_resumed` (no frame for *No Data Timeout Seconds*, e.g. wrong DTRACK
+output settings), `write_error`, and a `stop` summary (with `empty=true` if no frame was recorded).
+Activate DTRACK outputs **'fr'** (required to detect gaps) and **'ts'**. Files are flushed every
+*Flush Interval Seconds* and completely on `StopRecording()`.
+
+Problems are reported so that a recording never fails unnoticed:
+
+- **No data:** `IsReceivingData` becomes false and event `DataReceivingChanged( logger, false )` is
+  invoked (with a Console warning); recording continues and `DataReceivingChanged( logger, true )`
+  follows when frames arrive again. An empty recording is reported as error on stop.
+- **Write failure** (e.g. disk full): the recording stops automatically, `Failed` and `LastError` are
+  set and event `RecordingFailed( logger, LastError )` is invoked (with a Console error). The data file
+  then ends with the last data that reached the disk (possibly an incomplete line); `FramesWritten`
+  counts frames passed to the file and may exceed what was stored. Frames received after the failure
+  are dropped (`DroppedFrames`).
+
+Events are invoked on the main thread.
 
 A ready-made scene is available as package sample 'Marker Tracking Scene'.
 

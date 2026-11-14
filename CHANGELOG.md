@@ -1,6 +1,14 @@
 
 # List of ART DTRACK Plugin for Unity Game Engine releases
 
+## v1.2.0-3dof.5 (2026-11-14, local fork)
+
+- `DTrackMarkerLogger`: `StartRecording()` fails if DTrack is disabled or its UDP port could not be opened;
+  'no_data'/'data_resumed' events, `IsReceivingData`, `DataReceivingChanged`; empty recordings reported
+- `DTrackMarkerLogger`: write failures stop the recording (`Failed`, `LastError`, `RecordingFailed`,
+  `DroppedFrames`, 'write_error' event); `StopRecording()` never throws
+- `DTrack`: properties `IsStarted`, `IsReceiving`
+
 ## v1.2.0-3dof.4 (2026-11-14, local fork)
 
 - `DTrackMarkerLogger` never overwrites existing files: appends `_1`, `_2`, ... to the file name
