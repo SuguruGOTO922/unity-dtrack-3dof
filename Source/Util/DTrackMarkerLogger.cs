@@ -10,6 +10,8 @@
  *
  * Recording is controlled from scripts: StartRecording() creates a new file each time,
  * StopRecording() writes all received frames and closes the files (also done on disable/destroy).
+ * Existing files are never overwritten: if '<name>.csv' or '<name>_events.csv' exists,
+ * '<name>_1.csv', '<name>_2.csv', ... are used instead (see FilePath).
  *
  * Data file (one row per marker; one row with n_markers = 0 for frames without markers):
  *   recv_time_s,dtrack_frame,dtrack_ts,n_markers,marker_id,quality,x_mm,y_mm,z_mm,x,y,z
@@ -62,6 +64,8 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 	private StreamWriter eventsWriter;
 	private long startTicks;
 
+	private const int MaxFileNumber = 9999;  // highest number appended to file names
+
 	private long framesWritten;
 	private long gapCount;
 	private long missingFrames;
@@ -110,19 +114,18 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		if ( String.IsNullOrEmpty( path ) )
 			path = Path.Combine( Application.persistentDataPath, $"dtrack_markers_{DateTime.Now:yyyyMMdd_HHmmss}.csv" );
 
-		string eventsPath = Path.Combine( Path.GetDirectoryName( Path.GetFullPath( path ) ),
-		                                  Path.GetFileNameWithoutExtension( path ) + "_events.csv" );
+		string requestedPath = Path.GetFullPath( path );
+		string eventsPath;
 
 		try
 		{
-			Directory.CreateDirectory( Path.GetDirectoryName( Path.GetFullPath( path ) ) );
+			Directory.CreateDirectory( Path.GetDirectoryName( requestedPath ) );
 
-			this.dataWriter = new StreamWriter( path, false, new UTF8Encoding( false ), 1 << 16 );
-			this.eventsWriter = new StreamWriter( eventsPath, false, new UTF8Encoding( false ) );
+			path = openNewFiles( requestedPath, out eventsPath );
 		}
 		catch ( Exception e )
 		{
-			Debug.LogError( $"DTrackMarkerLogger: cannot open {path}: {e.Message}" );
+			Debug.LogError( $"DTrackMarkerLogger: cannot open {requestedPath}: {e.Message}" );
 			closeFiles();
 			return false;
 		}
@@ -138,7 +141,8 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 		this.startTicks = Stopwatch.GetTimestamp();
 		writeEvent( this.startTicks, "start",
 		            $"time={DateTime.Now:o}; stopwatch_hz={Stopwatch.Frequency}; port={this.dtrackSource.listenPort}; " +
-		            $"coordinates={this.dtrackSource.dTrackCoordinates}" );
+		            $"coordinates={this.dtrackSource.dTrackCoordinates}" +
+		            ( ( path != requestedPath ) ? $"; requested_path={requestedPath}" : "" ) );
 
 		this.queue = new BlockingCollection< Item >();
 		this.writerThread = new Thread( WriterThread ) { IsBackground = true, Name = "DTrackMarkerLogger" };
@@ -324,6 +328,54 @@ public class DTrackMarkerLogger : MonoBehaviour, IDTrackReceiver
 	private double seconds( long ticks )
 	{
 		return ( double )( ticks - this.startTicks ) / Stopwatch.Frequency;
+	}
+
+	// Create data and events files that don't exist yet: '<name><ext>', else '<name>_1<ext>', '<name>_2<ext>', ...
+	// FileMode.CreateNew is atomic, so existing files are never overwritten, even by concurrent recordings.
+
+	private string openNewFiles( string requestedPath, out string eventsPath )
+	{
+		string dir = Path.GetDirectoryName( requestedPath );
+		string name = Path.GetFileNameWithoutExtension( requestedPath );
+		string ext = Path.GetExtension( requestedPath );
+
+		for ( int n = 0; n <= MaxFileNumber; n++ )
+		{
+			string stem = ( n == 0 ) ? name : $"{name}_{n}";
+			string path = Path.Combine( dir, stem + ext );
+			eventsPath = Path.Combine( dir, stem + "_events.csv" );
+
+			FileStream data = tryCreateNew( path );
+			if ( data == null )  continue;  // exists
+
+			FileStream events = tryCreateNew( eventsPath );
+			if ( events == null )  // exists: discard the empty data file just created, try next number
+			{
+				data.Dispose();
+				File.Delete( path );
+				continue;
+			}
+
+			this.dataWriter = new StreamWriter( data, new UTF8Encoding( false ), 1 << 16 );
+			this.eventsWriter = new StreamWriter( events, new UTF8Encoding( false ) );
+			return path;
+		}
+
+		throw new IOException( $"no free file name up to '{name}_{MaxFileNumber}{ext}'" );
+	}
+
+	// Create a new file; null if a file or directory of this name exists already.
+
+	private static FileStream tryCreateNew( string path )
+	{
+		try
+		{
+			return new FileStream( path, FileMode.CreateNew, FileAccess.Write, FileShare.Read );
+		}
+		catch ( IOException ) when ( File.Exists( path ) || Directory.Exists( path ) )
+		{
+			return null;
+		}
 	}
 
 	private void closeFiles()
