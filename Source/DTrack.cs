@@ -74,6 +74,12 @@ public class DTrack : MonoBehaviour
 
 	private IDTrackReceiver[] receiversDR = new IDTrackReceiver[ 0 ];
 
+	// Receivers registered as components (local extension; allows several receivers per game object)
+	private List< IDTrackReceiver > directReceivers = new List< IDTrackReceiver >();
+
+	// Invoked on the receive thread (!) if a DTRACK packet could not be received or parsed (local extension).
+	public event Action< string > ReceiveError;
+
 	private DTrackSDK.DTrackSDK sdk = null;
 
 	private Thread thread;
@@ -151,6 +157,26 @@ public class DTrack : MonoBehaviour
 		updateReceiversDR();
 	}
 
+	// Register an IDTrackReceiver component to receive DTRACK tracking data (local extension).
+	//
+	// ReceiveDTrackFrame() of the receiver is called on the receive thread for every received frame.
+
+	public void RegisterReceiver( IDTrackReceiver receiver )
+	{
+		this.directReceivers.Add( receiver );
+
+		updateReceiversDR();
+	}
+
+	// Unregister an IDTrackReceiver component (local extension).
+
+	public void UnregisterReceiver( IDTrackReceiver receiver )
+	{
+		this.directReceivers.Remove( receiver );
+
+		updateReceiversDR();
+	}
+
 	// Update list of registered IDTrackReceiver components.
 
 	private void updateReceiversDR()
@@ -162,7 +188,9 @@ public class DTrack : MonoBehaviour
 			recs.Add( rec.GetComponent< IDTrackReceiver >() );
 		}
 
-		this.receiversDR = recs.ToArray();
+		recs.AddRange( this.directReceivers );
+
+		this.receiversDR = recs.ToArray();  // replaced as a whole, so the receive thread always sees a consistent array
 	}
 
 
@@ -194,6 +222,17 @@ public class DTrack : MonoBehaviour
 							Debug.Log( $"Error handling frame: {e}" );
 						}
 					}
+				}
+			}
+			else if ( this.runReceiveThread && ( this.sdk != null ) )  // local extension: report packets that failed to be received or parsed
+			{
+				try
+				{
+					this.ReceiveError?.Invoke( this.sdk.GetLastErrorMessage() );
+				}
+				catch ( Exception e )
+				{
+					Debug.Log( $"Error handling receive error: {e}" );
 				}
 			}
 		}
