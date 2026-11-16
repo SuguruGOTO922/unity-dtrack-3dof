@@ -57,7 +57,9 @@ public abstract class DTrackReceiver : MonoBehaviour, IDTrackReceiver
 
 		if ( dtr != null )
 		{
-			dtr.RegisterTarget( this.gameObject );
+			// local extension: register this component (not its game object), so several receivers
+			// on one game object all receive data, independent of component order
+			dtr.RegisterReceiver( this );
 			this.dtrackSource = dtr;
 		}
 		else
@@ -72,7 +74,8 @@ public abstract class DTrackReceiver : MonoBehaviour, IDTrackReceiver
 	{
 		if ( this.dtrackSource != null )
 		{
-			this.dtrackSource.UnregisterTarget( this.gameObject );
+			this.dtrackSource.UnregisterReceiver( this );  // local extension, see Register()
+			this.dtrackSource = null;
 		}
 	}
 

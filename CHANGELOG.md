@@ -1,6 +1,13 @@
 
 # List of ART DTRACK Plugin for Unity Game Engine releases
 
+## v1.2.0-3dof.7 (2026-11-16, unofficial fork)
+
+- `DTrackReceiver` registers itself as component (`RegisterReceiver`) instead of its game object: several
+  receivers on one game object (e.g. `DTrackReceiverMarkers` and `DTrackMarkerLogger`) all receive data,
+  independent of component order
+- `DTrack` delivers each frame only once per receiver, even if registered by both `RegisterTarget` and `RegisterReceiver`
+
 ## v1.2.0-3dof.6 (2026-11-14, unofficial fork)
 
 - Package renamed to `io.github.sugurugoto922.dtrack` ("DTRACK Plugin for Unity (3DOF marker fork)"),

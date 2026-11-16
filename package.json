@@ -1,6 +1,6 @@
 {
     "name": "io.github.sugurugoto922.dtrack",
-    "version": "1.2.0-3dof.6",
+    "version": "1.2.0-3dof.7",
     "displayName": "DTRACK Plugin for Unity (3DOF marker fork)",
     "description": "Unofficial fork of the ART DTRACK Plugin for Unity v1.1.3, adding single 3DOF marker tracking and lossless recording. Not affiliated with or endorsed by Advanced Realtime Tracking GmbH & Co. KG.",
     "unity": "2019.4",

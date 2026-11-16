@@ -1,6 +1,6 @@
 # DTRACK Plugin for Unity: 3DOF marker fork (unofficial)
 
-**Version v1.2.0-3dof.6**, package `io.github.sugurugoto922.dtrack`
+**Version v1.2.0-3dof.7**, package `io.github.sugurugoto922.dtrack`
 
 > **Unofficial fork** of the [ART DTRACK Plugin for Unity](https://github.com/ar-tracking/UnityDTrackPlugin)
 > v1.1.3 by Advanced Realtime Tracking GmbH & Co. KG, adding single 3DOF marker ('3d') tracking
@@ -43,7 +43,7 @@ In the Package Manager choose *+* &rarr; *Add package from git URL...* and enter
 with a release tag, or add it to your project's `Packages/manifest.json`:
 
 ```json
-"io.github.sugurugoto922.dtrack": "https://github.com/SuguruGOTO922/unity-dtrack-3dof.git#v1.2.0-3dof.6"
+"io.github.sugurugoto922.dtrack": "https://github.com/SuguruGOTO922/unity-dtrack-3dof.git#v1.2.0-3dof.7"
 ```
 
 Pin a release tag (see [CHANGELOG.md](CHANGELOG.md)) so that you know which version recorded your data;

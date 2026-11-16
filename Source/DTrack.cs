@@ -139,6 +139,9 @@ public class DTrack : MonoBehaviour
 
 
 	// Register a DTrackReceiver game object to receive DTRACK tracking data.
+	//
+	// Only the first IDTrackReceiver component of the game object receives data; prefer RegisterReceiver()
+	// (local extension). Kept for compatibility.
 
 	public void RegisterTarget( GameObject receiver )
 	{
@@ -188,10 +191,16 @@ public class DTrack : MonoBehaviour
 
 		foreach ( GameObject rec in this.receivers )
 		{
-			recs.Add( rec.GetComponent< IDTrackReceiver >() );
+			if ( rec == null )  continue;  // local extension: skip destroyed game objects
+
+			IDTrackReceiver r = rec.GetComponent< IDTrackReceiver >();
+			if ( ( r != null ) && ! recs.Contains( r ) )  recs.Add( r );
 		}
 
-		recs.AddRange( this.directReceivers );
+		foreach ( IDTrackReceiver r in this.directReceivers )
+		{
+			if ( ! recs.Contains( r ) )  recs.Add( r );  // local extension: deliver each frame only once per receiver
+		}
 
 		this.receiversDR = recs.ToArray();  // replaced as a whole, so the receive thread always sees a consistent array
 	}
