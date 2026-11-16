@@ -3,6 +3,8 @@
 
 ## Unreleased (unofficial fork)
 
+- DTrackReceiver uses FindAnyObjectByType instead of the obsolete FindFirstObjectByType (warning CS0618
+  in Unity 6.4); no change in behaviour (one DTrack per scene)
 - README rewritten as a short guide to this fork's additions; the original documentation is linked
   (ART DTRACK Plugin v1.1.3 README on GitHub)
 

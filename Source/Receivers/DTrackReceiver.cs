@@ -50,7 +50,7 @@ public abstract class DTrackReceiver : MonoBehaviour, IDTrackReceiver
 	protected void Register()
 	{
 #if UNITY_2023_1_OR_NEWER
-		DTrack dtr = FindFirstObjectByType< DTrack >();
+		DTrack dtr = FindAnyObjectByType< DTrack >();  // local extension: FindFirstObjectByType is obsolete since Unity 6.4
 #else
 		DTrack dtr = FindObjectOfType< DTrack >();
 #endif
