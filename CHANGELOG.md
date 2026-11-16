@@ -1,6 +1,11 @@
 
 # List of ART DTRACK Plugin for Unity Game Engine releases
 
+## Unreleased (unofficial fork)
+
+- README rewritten as a short guide to this fork's additions; the original documentation is linked
+  (ART DTRACK Plugin v1.1.3 README on GitHub)
+
 ## v1.2.0-3dof.7 (2026-11-16, unofficial fork)
 
 - `DTrackReceiver` registers itself as component (`RegisterReceiver`) instead of its game object: several

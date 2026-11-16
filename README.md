@@ -2,461 +2,117 @@
 
 **Version v1.2.0-3dof.7**, package `io.github.sugurugoto922.dtrack`
 
-> **Unofficial fork** of the [ART DTRACK Plugin for Unity](https://github.com/ar-tracking/UnityDTrackPlugin)
-> v1.1.3 by Advanced Realtime Tracking GmbH & Co. KG, adding single 3DOF marker ('3d') tracking
-> (see [**Applying Single 3DOF Marker Data**](#pluginconfigurationmarkers)) and lossless recording of
-> marker data (see [**Recording Marker Data**](#recording-marker-data)).
-> It is not affiliated with or endorsed by Advanced Realtime Tracking GmbH & Co. KG.
-> Licensed under the BSD-3-Clause license (see [LICENSE.md](LICENSE.md)), like the original.
-> The rest of this document is the original documentation, extended for this fork.
+An unofficial fork of the [ART DTRACK Plugin for Unity](https://github.com/ar-tracking/UnityDTrackPlugin)
+v1.1.3 that adds **single 3DOF marker ('3d') tracking** and **lossless recording of marker data**
+for research use. It is not affiliated with or endorsed by Advanced Realtime Tracking GmbH & Co. KG.
 
-This is a component for Unity 2019 or later with the purpose of
-native integration of the Advanced Realtime Tracking (ART) DTRACK
-(DTrack2 or DTRACK3) realtime tracking solutions.
+Everything else (DTRACK setup, room coordinates, 6DOF Standard Bodies, Flysticks, Fingertracking,
+stateful firewall) works exactly as in the original plugin and is described in the
+[original documentation (v1.1.3)](https://github.com/ar-tracking/UnityDTrackPlugin/blob/v1.1.3/README.md).
 
-![Figure: ART DTRACK](Documentation~/images/card-dtrack.png)
-<br>
+## What this fork adds
 
-This Unity Asset provides
-access to DTRACK realtime tracking data, that is sent over network using
-UDP/IP datagrams. Each UDP packet contains one frame of tracking
-data including all outputs activated via the DTRACK software (see
-section [**DTRACK Configuration**](#dtrackconfiguration)). This package currently
-supports the DTRACK Standard Body ('6d'), Flystick ('6df2'), Fingertracking ('gl') and
-single 3DOF marker ('3d') data formats.
+| Part | Description |
+|---|---|
+| SDK: `3d` parser | `DTrackMarker`, `Frame.Markers` / `GetMarker()` |
+| `DTrackReceiverMarkers` | Lets game objects follow single markers (nearest-neighbour assignment) |
+| `DTrackMarkerLogger` | Records **every** received frame to CSV on its own threads; never overwrites files, reports gaps, missing data and write errors |
+| `DTrack` additions | `RegisterReceiver()` / `UnregisterReceiver()`, `ReceiveError` event, `IsStarted` / `IsReceiving` |
+| Receiver registration | Receivers register as components, so several receivers on one game object all get data; each frame is delivered once per receiver |
+| Sample | *Marker Tracking Scene* (Package Manager → Samples) |
 
-## Features <a name="features"></a>
+Assembly name (`ART.DTRACKPlugin`), namespaces and script GUIDs are unchanged, so scenes made with the
+original plugin keep working. Changes to ART's files are kept minimal and marked `local extension`;
+`git diff base-v1.1.3` shows all of them. See [CHANGELOG.md](CHANGELOG.md) for the release history.
 
-- Validated with Unity Editors 2019.4 to 2023.2 (but should work with any later Unity)
-- Supports DTRACK room calibration modes 'Powerwall' and 'Normal'
-- Supports tracking of 6DOF Standard Bodies and Flystick2, Flystick2+ and Flystick3
-- Supports Flystick buttons and joystick/trigger (emitting Unity events)
-- Supports Fingertracking, with 'Leap Motion Realistic Male/Female Hands' (by Storkplay)
-- (Optionally) enables UDP connection through stateful firewall
+## Installation
 
-## Installing the ART DTRACK Plugin <a name="installing"></a>
-
-### Installing this fork <a name="installingfork"></a>
-
-Requires [git](https://git-scm.com/) to be installed (restart Unity Hub/Editor afterwards).
-In the Package Manager choose *+* &rarr; *Add package from git URL...* and enter the repository URL
-with a release tag, or add it to your project's `Packages/manifest.json`:
+Requires [git](https://git-scm.com/) (restart Unity Hub/Editor after installing it). In the Package Manager
+choose *+* → *Add package from git URL...*, or add to `Packages/manifest.json`:
 
 ```json
 "io.github.sugurugoto922.dtrack": "https://github.com/SuguruGOTO922/unity-dtrack-3dof.git#v1.2.0-3dof.7"
 ```
 
-Pin a release tag (see [CHANGELOG.md](CHANGELOG.md)) so that you know which version recorded your data;
-to update, change the tag. The SSH form `git@github.com:SuguruGOTO922/unity-dtrack-3dof.git#<tag>`
-works as well. To work on the package, reference a local clone instead:
-`"io.github.sugurugoto922.dtrack": "file:/path/to/unity-dtrack-3dof"`.
-Don't install this fork together with the official package `com.ar-tracking.dtrack` (same classes).
+- **Pin a release tag**, so you know which version recorded your data. To update, change the tag.
+- To develop the package, reference a local clone instead: `"file:/path/to/unity-dtrack-3dof"`.
+- Don't install it together with the official package `com.ar-tracking.dtrack` (same classes).
 
-The following sections describe the ways to get the **official** ART DTRACK Plugin
-(without the extensions of this fork).
+## Quick start: single markers
 
-### Unity Asset Store <a name="assetstore"></a>
+1. **DTRACK**: in *Output Settings*, send to the Unity PC's IP and port, and activate outputs
+   **`fr`**, **`ts`** and **`3d`**.
+2. **Unity**: add a game object with the **DTrack** component; set *Listen Port* and
+   *DTrack Coordinates* (*Powerwall* recommended) to match DTRACK.
+3. Add **DTrackReceiverMarkers** and fill *Targets* with the objects that shall follow markers.
+4. To record data, add **DTrackMarkerLogger** and call `StartRecording()` / `StopRecording()`.
 
-The plugin is available (for free) in the Unity Asset Store 
-[https://assetstore.unity.com/packages/tools/integration/art-dtrack-plugin-246990](https://assetstore.unity.com/packages/tools/integration/art-dtrack-plugin-246990).
+## Following markers: `DTrackReceiverMarkers`
 
-After 'purchasing' you can install it via the Unity Package Manager:
+DTRACK assigns single-marker IDs per frame (an ID changes when a marker is lost and found again), so
+markers are matched to targets by position, not by ID:
 
-1. Launch Unity Hub
-- Create/Open Unity project
-- Open Package Manager ( *Window* &rarr; *Package Manager* &rarr; *Packages: My Assets* )
-- Download the package (button *Download* ), then install it (button *Install* )
+- An unassigned target picks up the nearest free marker within *Acquire Radius* (m; 0 = unlimited);
+  place targets near where their markers appear first.
+- An assigned target follows the nearest marker that moved less than *Max Jump Distance* (m) since the
+  previous frame.
+- After *Lost Timeout* (s) without its marker the target becomes unassigned; *Hide When Lost*
+  deactivates it meanwhile.
 
-The plugin will be installed in your project's Assets folder:<br>
-/path/to/unity/projects/*MyUnityProject*/**Assets/ARTDTrackPlugin**/ .
+Scripts can read `Slots` (`IsAssigned`, `IsTracked`, `DTrackId`, `Position`), `AllMarkerPositions` /
+`AllMarkerIds`, `LastFrameCounter`, and subscribe to `MarkersUpdated`. Positions are Unity world
+coordinates in meters.
 
-### OpenUPM <a name="openupm"></a>
+> This receiver processes only the latest frame per Unity frame. Use it for display, not for recording.
 
-OpenUPM is an open-source service hosting lots of (UPM) Unity packages, all of them released as open-source.
-The ART DTRACK plugin is available (for free) via
-[https://www.openupm.com/packages/com.ar-tracking.dtrack](https://www.openupm.com/packages/com.ar-tracking.dtrack).
+## Recording: `DTrackMarkerLogger`
 
-To install it, follow the instructions mentioned at the above website; roughly:
-
-1. Launch Unity Hub
-- Create/Open Unity project
-- Open *Edit* &rarr; *Project Settings...* &rarr; *Package Manager*
-- Add a new Scoped Registry (corresponding to the above OpenUPM link), then click *Save* or *Apply*
-- Open Package Manager ( *Window* &rarr; *Package Manager* &rarr; *Packages: My Registries* )
-- Choose _ART DTRACK Plugin_ , then install it (button *Install* )
-
-The plugin will be installed in your project's Packages folder:<br>
-/path/to/unity/projects/*MyUnityProject*/**Packages/ART DTRACK Plugin**/ .
-
-### GitHub <a name="github"></a>
-
-You can download a ready-to-use custom Unity package ( UnityDTrackPlugin-vX.X.X.unitypackage ) at<br>
-[https://github.com/ar-tracking/UnityDTrackPlugin/releases](https://github.com/ar-tracking/UnityDTrackPlugin/releases).
-
-In order to install the package, follow the steps below.
-
-1. Launch Unity Hub
-- Create/Open Unity project
-- Import package ( *Assets* &rarr; *Import Package...* &rarr; *Custom Package...* )
-
-The plugin will be installed in your project's Assets folder:<br>
-/path/to/unity/projects/*MyUnityProject*/**Assets/ARTDTrackPlugin**/ .
-
-### Plain Sources <a name="plainsources"></a>
-
-You can download or clone sources for this plugin at
-[https://github.com/ar-tracking/UnityDTrackPlugin](https://github.com/ar-tracking/UnityDTrackPlugin).
-
-### Updating from ART DTRACK Plugin v1.0.3 or later
-
-**IMPORTANT:** To update an older plugin within an existing Unity project it's necessary to replace the entire directory
-/path/to/unity/projects/*MyUnityProject*/Assets/**DTrack**/ or<br>
-/path/to/unity/projects/*MyUnityProject*/Assets/**ARTDTrackPlugin**/ , if present.
-
-1. Launch Unity Hub
-- Open Unity project
-- Remove the directory, either manually or in Unity Editor (e.g. *Project* &rarr; *Assets* &rarr; *DTrack* &rarr; *(right click) Delete* )
-- Install the ART DTRACK Plugin (see above)
-
-There's no need to adjust settings in already attached scripts ( **DTrack**, **DTrackReceiver6Dof**,
-**DTrackReceiverFlystick**, ... ).
-
-**Please note:** The formerly (ART DTRACK Plugins v1.0.X) used 'Unity events' to notify pressed
-Flystick buttons were declared deprecated
-and will be removed in some future version of the plugin. Please don't use them in new projects
-(see section [**Applying Flystick Data**](#pluginconfigurationflystick) ).
-
-**Tip:** If after an update existing button event settings ( *Button Press Event X*, now denoted as
-*Button X Pressed Event Deprecated* ) are not shown in Unity Editor, exiting and re-starting of the Unity Editor might help.
-
-
-## DTRACK Configuration <a name="dtrackconfiguration"></a>
-
-Find here a quick-start guide to DTRACK. For details, please refer
-to your _DTRACK3 User's Guide_ and _DTRACK3 Programmer's Guide_ , that is
-shipped with the DTRACK distribution. In this section we assume that
-the ART tracking system is properly set up and a room calibration
-was done. Further, a set of Standard Bodies and/or Flysticks and/or Fingertracking hands is
-calibrated.
-
-### Room Calibration <a name="dtrackroomcalibration"></a>
-
-For general information about the DTRACK room calibration and room
-adjustment see the _DTRACK3 User's Guide_ . Here we discuss details
-relevant for use with the Unity Engine.
-
-DTRACK coordinates refer to a right-handed coordinate system, whereas
-Unity is using a left-handed coordinate system with the Y axis pointing
-up. The plugin provides two possibilities to convert DTRACK coordinates
-into the Unity world, corresponding to the two DTRACK calibration modes
-( setting _coordinate system_ ).
-
-![Figure: DTRACK3 room calibration dialog](Documentation~/images/dtrack-room-calibration.png)
-<br>
-
-The calibration angle tool which comes with your ART tracking system
-defines the coordinate system layout in your tracking area. It
-consists of four retroreflective or active markers mounted onto an
-L-shaped frame. The marker on top of the edge of this L-shape by default
-designates the origin of the DTRACK coordinate system. 
-
-![Figure: DTRACK calibration angle tool](Documentation~/images/calibration-angle.png)
-<br>
-
-#### DTRACK Calibration Mode 'Powerwall'
-
-**Please note:** It's recommended to use this calibration mode.
-
-When using the DTRACK _Powerwall_
-calibration mode (see figure below), the long arm of this L-shape
-corresponds to the X axis and the short arm to the (-Z) axis. DTRACK
-coordinates refer to a right-handed coordinate system, so if the
-tool is placed flat on the ground with the markers pointing up, the
-Y axis points upwards.
-
-The plugin transforms a right-handed position of a DTRACK 6DOF
-measurement to a left-handed Unity position by negating the Z
-axis, i.e.<br>
-
-**(** ***X***<sub>Unity</sub> , ***Y***<sub>Unity</sub> ,
-***Z***<sub>Unity</sub> ) = ( ***X***<sub>DTRACK</sub> ,
-***Y***<sub>DTRACK</sub>, ***-Z***<sub>DTRACK</sub> **)**.
-
-![Figure: DTRACK and Unity coordinate systems](Documentation~/images/dtrack-vs-unity-powerwall.png)
-<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DTRACK and Unity coordinate systems in _Powerwall_ mode
-<br>
-
-#### DTRACK Calibration Mode 'Normal'
-
-This was the only available mode in ART DTRACK plugin prior to v1.1.1.
-
-**Please note:** It's recommended to prefer the 'Powerwall' calibration mode (see above).
-
-When using the DTRACK _Normal_
-calibration mode (see figure below), the long arm of the L-shape
-corresponds to the X axis and the short arm to the Y axis. DTRACK
-coordinates refer to a right-handed coordinate system, so if the
-tool is placed flat on the ground with the markers pointing up, the
-Z axis points upwards.
-
-The plugin transforms a right-handed position of a DTRACK 6DOF
-measurement to a left-handed Unity position by switching the Y
-and Z axes, i.e.<br>
-
-**(** ***X***<sub>Unity</sub> , ***Y***<sub>Unity</sub> ,
-***Z***<sub>Unity</sub> ) = ( ***X***<sub>DTRACK</sub> ,
-***Z***<sub>DTRACK</sub>, ***Y***<sub>DTRACK</sub> **)**.
-
-![Figure: DTRACK and Unity coordinate systems](Documentation~/images/dtrack-vs-unity.png)
-<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DTRACK and Unity coordinate systems in _Normal_ mode
-<br>
-
-### Setting Outputs <a name="dtracksettingoutputs"></a>
-
-To configure the tracking data stream generated by DTRACK, execute
-these steps:
-
-1. Open dialog *Output Settings* via menu *Tracking* &rarr; *Output* (DTRACK3) or *Settings*
-&rarr; *Output* (DTrack2), respectively
-- Activate a channel if needed
-- Fill in hostname or IP address, and UDP port number of the device receiving tracking data
-- Select outputs you are interested in (i.e., currently frame counter 'fr',
-6DOF Standard Body '6d', Flystick '6df2', Fingertracking 'gl' and
-single 3DOF markers '3d' are supported)
-
-![Figure: DTRACK3 output dialog](Documentation~/images/dtrack-output.png)
-<br>
-
-### Identifying Body IDs <a name="dtrackidentifyingbodyids"></a>
-
-There are several ways to identify the ID numbers of DTRACK Standard Bodies, Flysticks and Fingertracking hands,
-as needed later to configure the Unity plugin. E.g. refer to column *ID* in dialog *Body Administration*
-via menu *Tracking* &rarr; *Body Administration* (DTRACK3) or *Settings* &rarr; *Body Administration* (DTrack2).
-
-![Figure: DTRACK3 body administration dialog](Documentation~/images/dtrack-body-administration-standard.png)
-<br>
-
-Note that listed Flystick IDs are prefixed with a capital **'F'**, as well as listed Fingertracking hand IDs
-are prefixed with a capital **'H'**. When referencing Flysticks or Fingertracking hands from within Unity,
-this prefix must be removed.
-
-![Figure: DTRACK3 body administration dialog](Documentation~/images/dtrack-body-administration-flystick.png)
-<br>
-
-
-### Fingertracking <a name="dtrackfingertracking"></a>
-
-When configuring ART Fingertracking hand devices with 3 thimbles, be sure to activate the _Simulate 5 fingers_ setting.
-
-![Figure: DTRACK3 Fingertracking administration dialog](Documentation~/images/dtrack-fingertracking-administration.png)
-<br>
-
-
-## Plugin Configuration <a name="pluginconfiguration"></a>
-
-Streaming position, rotation and button events data from DTRACK
-tracking systems to objects in your scene, requires appropriate
-network settings. In your scene add an *Empty* game object and give
-it a name, e.g. **DTrackSource**. To this object attach the
-**DTrack** script via *Add Component* &rarr; *Scripts* &rarr;
-*DTrack* &rarr; *DTrack*.
-
-- Set *Listen Port* number matching the
-  setting for DTRACK (see section [**Setting Outputs**](#dtracksettingoutputs))
-- Optionally set *Controller Host* with hostname or IP address of your ART Controller, if there is a
-  'stateful firewall' installed between Controller and Unity; normally that's sufficient to pass UDP packets
-  with tracking data to the plugin
-- Set *DTrack Coordinates* matching the calibration mode used in DTRACK
-  (see section [**Room Calibration**](#dtrackroomcalibration))
-
-Note that position data in the DTRACK output stream have unit
-millimeters. The DTRACK Unity Plugin converts such values to unit meter.
-
-![Figure: Unity DTrackSource inspector](Documentation~/images/unity-dtrack-source.png)
-<br>
-
-### Applying 6DOF Standard Body Data
-
-In your scene attach via *Add Component* the DTrack script
-**DTrackReceiver6Dof** to an object you want to receive positional and
-rotational data. In the **DTrackReceiver6Dof** mask type in the ID
-that was assigned to the Standard Body by DTRACK
-(see section [**Identifying Body IDs**](#dtrackidentifyingbodyids)).
-
-![Figure: Unity 6DOF inspector](Documentation~/images/unity-dtrack-6dof.png)
-<br>
-
-When the ART tracking system is running, you should now be able to
-see *Position* and *Rotation* data in the **Transform** box, as soon
-as you switch to *Play* mode.
-
-### Applying 6DOF Standard Body Data to the Camera
-
-For non-static, point-of-view cameras, you can attach a DTRACK
-receiver with positional and rotational data, e.g. of a 6DOF Standard Body.
-
-![Figure: Unity POV Camera inspector](Documentation~/images/unity-dtrack-pov.png)
-<br>
-
-### Applying Flystick Data <a name="pluginconfigurationflystick"></a>
-
-In your scene attach via *Add Component* the DTrack script
-**DTrackReceiverFlystick** to an object you want to receive positional
-and rotational data. In the **DTrackReceiverFlystick** mask type in the ID that was
-assigned to the Flystick by DTRACK
-(see section [**Identifying Body IDs**](#dtrackidentifyingbodyids), without prefixed capital **'F'**).
-
-![Figure: Unity Flystick inspector](Documentation~/images/unity-dtrack-flystick.png)
-<br>
-
-DTrack script **DTrackReceiverFlystick** can send 'Unity events' to announce changed Flystick buttons
-or joystick values to scripts attached to arbitrary game objects. It provides:
-
-- 8 events on changed Flystick buttons corresponding to the (maximum) number of 8 buttons of Flystick2+
-  ( *Button X Changed Event* ); an event is invoked once every time a button is pressed or released
-- One event on changed Flystick joystick values (horizontal and vertical) ( *Joystick Changed Event* );
-  the event is invoked every time one of the values has changed
-- One event on changed trigger value (just available at Flystick2+) ( *Analog 3 Changed Event* ); the event
-  is invoked every time the value has changed
-
-**Please note:** The formerly (ART DTRACK Plugins v1.0.X) used 'Unity events' to notify pressed Flystick
-buttons ( *Button Press Event X* ) were declared deprecated and will be removed in some future version of the plugin.
-Please don't use them in new projects.
-
-![Figure: Unity Flystick inspector](Documentation~/images/unity-dtrack-flystick-analogs.png)
-<br>
-
-See scripts **ExampleFlystickListener** or **ExampleCameraNavigator** on how to receive these 'Unity events' in your scripts.
-To register an own
-listener routine first create an additional entry in the wanted *Event* element by pressing *+*. Then drag
-and drop the game object, that should receive the event, from the *Hierarchy* tree into the *Event* element.
-Finally choose the listener routine's name.
-
-### Applying Fingertracking Data
-
-The DTRACK Plugin provides support of ART Fingertracking, so far adjusted
-for usage with 'Leap Motion Realistic Male/Female Hands' (by Storkplay, available at
-the Unity Asset Store), or hand models with equivalent rig and coordinate systems:
-
-- https://assetstore.unity.com/packages/3d/characters/humanoids/leap-motion-realistic-male-hands-109961
-- https://assetstore.unity.com/packages/3d/characters/humanoids/leap-motion-realistic-female-hands-211090
-
-![Figure: Leap Motion Realistic Male Hand](Documentation~/images/leapmotion-realistic-hand.png)
-<br>
-
-Add one of the *Prefabs* of your **LMRealisticFemaleHands** or **LMRealisticMaleHands** asset to your scene.
-
-Within the root object of the created left or right hand (**Hand_0X_L** or **Hand_0X_R**)
-now two components with missing scripts appear. Remove these components via
-*Remove Component*, attach instead via *Add Component* the DTrack script
-**LMRealisticHandMapper**. It automatically will attach also a DTrack script
-**DTrackReceiverHand**.
-
-In **DTrackReceiverHand** mask enter the *Hand Id* that was assigned to the Fingertracking device by DTRACK
-(see section [**Identifying Body IDs**](#dtrackidentifyingbodyids), without prefixed capital **'H'**).
-
-In **LMRealisticHandMapper** mask first ensure that the number of elements in list *Fingers* is *5*.
-Now enter links to the corresponding game objects of the hand,
-for *Wrist* (**L_Wrist** or **R_Wrist**) and the fingers' root joints (**L_Finger_Index_A**, ... or
-**R_Finger_Index_A**, ...). This can be done e.g. by dragging and dropping the objects from the *Hierarchy*
-tree into the **LMRealisticHandMapper** mask.
-The elements of *Fingers* have to be ordered as: thumb, index, middle, ring, pinky.
-
-![Figure: Unity Hand inspector](Documentation~/images/unity-dtrack-hand.png)
-<br>
-
-If the real size of the person's hand is differing too much from the hand model's size, it might be useful
-to modify the *Scale* factor in the **Transform** box of the hand's root object (**Hand_0X_L** or **Hand_0X_R**).
-If setting *Automatic Scale* is enabled, the hand mapper script tries to find a suitable value automatically.
-
-### Applying Single 3DOF Marker Data <a name="pluginconfigurationmarkers"></a>
-
-Activate output '3d' in DTRACK. DTRACK assigns the IDs of single markers per frame:
-an ID changes whenever a marker is lost and found again. Therefore markers are not
-selected by ID but assigned to game objects by nearest-neighbour tracking.
-
-Add the DTrack script **DTrackReceiverMarkers** to a game object and fill its list
-*Targets* with the game objects that shall follow single markers (one marker each):
-
-- Place each target near the position where its marker is expected first; an unassigned
-  target picks up the nearest free marker (within *Acquire Radius*, 0 = unlimited).
-- An assigned target follows the nearest marker that moved less than *Max Jump Distance*
-  (meter) since the previous DTRACK frame.
-- If its marker is missing for longer than *Lost Timeout* (seconds), the target becomes
-  unassigned again; *Hide When Lost* deactivates it meanwhile.
-
-Scripts can read `Slots` (per target: `IsAssigned`, `IsTracked`, `DTrackId`, `Position`),
-`AllMarkerPositions` / `AllMarkerIds` (all markers of the latest frame) and subscribe to
-event `MarkersUpdated`. Positions are Unity world coordinates in meter.
-
-#### Recording Marker Data
-
-Attach **DTrackMarkerLogger** to any game object to record the single markers of
-**every received DTRACK frame**. Recording does not start automatically; control it from
-your scripts:
+Records the markers of **every received DTRACK frame**. Frames are taken on the receive thread and
+written by a separate thread, so recording doesn't depend on Unity's frame rate, main-thread stalls or
+*Run In Background*.
 
 ```csharp
-DTrackMarkerLogger logger = ...;
-logger.StartRecording();              // new file each call; optional argument: file path
-...
-logger.StopRecording();               // writes all received frames and closes the files
-Debug.Log( $"{logger.FilePath}: {logger.FramesWritten} frames, {logger.MissingFrames} missing" );
+if ( logger.StartRecording() )        // new file each call; optional argument: file path
+{
+    ...
+    logger.StopRecording();           // writes all queued frames and closes the files
+    Debug.Log( $"{logger.FilePath}: {logger.FramesWritten} frames, {logger.MissingFrames} missing" );
+}
 ```
 
-`StartRecording()` returns false (with an error in the Console) if already recording, if the
-DTrack object is missing or disabled, if DTrack could not open its UDP port (e.g. used by
-another application), or if the files cannot be created.
-Disabling or destroying the component (e.g. leaving Play mode) stops a running recording
-and writes all data. `IsRecording`, `FilePath`, `EventsFilePath` and the statistics
-(`FramesWritten`, `GapCount`, `MissingFrames`, `ErrorCount`) remain readable after stopping. Frames are taken directly from the receive thread and
-written by a separate thread, so recording does not depend on Unity's frame rate, main thread
-stalls or *Run In Background*. (`DTrackReceiverMarkers` in contrast only processes the
-latest frame per Unity frame, which is fine for display but not for recording.)
+- **Start**: returns false (with a Console error) if already recording, if DTrack is missing or disabled,
+  if its UDP port couldn't be opened, or if the files can't be created. Recording never starts by itself;
+  disabling the component (e.g. leaving Play mode) stops it and writes all data.
+- **Files**: the path passed to `StartRecording()`, else *File Path*, else
+  `Application.persistentDataPath`. Existing files are **never overwritten**: `_1`, `_2`, … is appended
+  (actual path in `FilePath`). Flushed every *Flush Interval Seconds*.
+- **Data** (`<name>.csv`), one row per marker; frames without markers get one row with `n_markers` = 0:
+  `recv_time_s,dtrack_frame,dtrack_ts,n_markers,marker_id,quality,x_mm,y_mm,z_mm,x,y,z`
+  (`recv_time_s`: seconds since start, monotonic; `dtrack_ts`: -1 without output `ts`;
+  `x_mm`..`z_mm`: raw DTRACK room coordinates; `x`..`z`: Unity world coordinates in m).
+- **Events** (`<name>_events.csv`, `recv_time_s,type,detail`): `start`, `gap` (frame-counter jumps),
+  `counter_reset`, `no_frame_counter` (output `fr` not active, so gaps can't be detected),
+  `receive_error`, `no_data` / `data_resumed`, `write_error`, `stop` (summary).
 
-Data are written to the path given to `StartRecording()`, else to *File Path*, or to
-`Application.persistentDataPath` if both are empty. Existing files are never overwritten: if
-`<name>.csv` or `<name>_events.csv` exists, `<name>_1.csv`, `<name>_2.csv`, ... are used instead
-(the actual path is available as `FilePath`, and the `start` event then lists `requested_path`).
-Data are written one row per
-marker (frames without markers get one row with `n_markers` = 0, so every frame appears):
+Problems are reported, never silent:
 
-`recv_time_s,dtrack_frame,dtrack_ts,n_markers,marker_id,quality,x_mm,y_mm,z_mm,x,y,z`
+- **No data** for *No Data Timeout Seconds*: `IsReceivingData` = false, event
+  `DataReceivingChanged( logger, false )` and a Console warning; recording continues. An empty
+  recording is reported as an error on stop.
+- **Write failure** (e.g. disk full): recording stops, `Failed` / `LastError` are set, event
+  `RecordingFailed( logger, error )` and a Console error; later frames are counted in `DroppedFrames`.
 
-- `recv_time_s`: receive time in seconds since start of recording (monotonic, high resolution)
-- `dtrack_ts`: DTRACK timestamp, -1 if output 'ts' is not activated
-- `x_mm` .. `z_mm`: raw DTRACK position (mm, room coordinates); `x` .. `z`: Unity world coordinates (meter)
-
-A second file `<name>_events.csv` (`recv_time_s,type,detail`) lists `start` (wall clock time,
-port, coordinates), `gap` (jumps of the DTRACK frame counter, i.e. frames lost before
-reaching Unity), `counter_reset`, `receive_error` (packets that could not be received or
-parsed), `no_data` / `data_resumed` (no frame for *No Data Timeout Seconds*, e.g. wrong DTRACK
-output settings), `write_error`, and a `stop` summary (with `empty=true` if no frame was recorded).
-Activate DTRACK outputs **'fr'** (required to detect gaps) and **'ts'**. Files are flushed every
-*Flush Interval Seconds* and completely on `StopRecording()`.
-
-Problems are reported so that a recording never fails unnoticed:
-
-- **No data:** `IsReceivingData` becomes false and event `DataReceivingChanged( logger, false )` is
-  invoked (with a Console warning); recording continues and `DataReceivingChanged( logger, true )`
-  follows when frames arrive again. An empty recording is reported as error on stop.
-- **Write failure** (e.g. disk full): the recording stops automatically, `Failed` and `LastError` are
-  set and event `RecordingFailed( logger, LastError )` is invoked (with a Console error). The data file
-  then ends with the last data that reached the disk (possibly an incomplete line); `FramesWritten`
-  counts frames passed to the file and may exceed what was stored. Frames received after the failure
-  are dropped (`DroppedFrames`).
-
+Statistics (`FramesWritten`, `GapCount`, `MissingFrames`, `ErrorCount`) stay readable after stopping.
 Events are invoked on the main thread.
 
-A ready-made scene is available as package sample 'Marker Tracking Scene'.
+## Custom receivers
 
-<br><br><br>
+Subclass `DTrackReceiver` and call `Register()` / `Unregister()` in `OnEnable()` / `OnDisable()`, like
+the built-in receivers; or implement `IDTrackReceiver` and call `DTrack.RegisterReceiver()`.
+`ReceiveDTrackFrame()` runs on the receive thread: only store the frame there and do all Unity work in
+`Update()`.
 
-Advanced Realtime Tracking GmbH & Co. KG<br>
-Am Oeferl 6<br>
-82362 Weilheim i. OB<br>
-Germany<br>
+## License
 
-https://ar-tracking.com
-
+BSD-3-Clause, like the original; see [LICENSE.md](LICENSE.md) (ART's copyright notice plus the
+fork's additions).
